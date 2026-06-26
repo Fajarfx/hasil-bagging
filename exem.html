@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard Monitoring Bagger</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            background: #f4f7fc;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #1a3b5d;
+        }
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 16px;
+            background: #eef3fa;
+            border-radius: 12px;
+        }
+        .toolbar label {
+            font-weight: 600;
+            color: #1a3b5d;
+        }
+        .toolbar input[type="file"],
+        .toolbar input[type="number"],
+        .toolbar button {
+            padding: 8px 14px;
+            border: 1px solid #b0c4de;
+            border-radius: 8px;
+            background: white;
+            font-size: 14px;
+        }
+        .toolbar button {
+            background: #1a3b5d;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: 0.2s;
+            font-weight: 600;
+        }
+        .toolbar button:hover {
+            background: #0f2a44;
+        }
+        .toolbar .btn-success {
+            background: #2a7d4f;
+        }
+        .toolbar .btn-success:hover {
+            background: #1d5f3b;
+        }
+        .toolbar .btn-warning {
+            background: #b45f2b;
+        }
+        .toolbar .btn-warning:hover {
+            background: #8f4a1f;
+        }
+        .table-wrapper {
+            overflow-x: auto;
+            margin-top: 10px;
+            border-radius: 12px;
+            border: 1px solid #dde6ef;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 13px;
+            min-width: 800px;
+        }
+        th {
+            background: #1a3b5d;
+            color: white;
+            padding: 10px 8px;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+        td {
+            padding: 6px 8px;
+            border: 1px solid #d0dae8;
+            text-align: center;
+            white-space: nowrap;
+        }
+        tr:nth-child(even) {
+            background: #f8faff;
+        }
+        .highlight-green {
+            background-color: #a3e4a3 !important;
+        }
+        .highlight-blue {
+            background-color: #a3d0f5 !important;
+        }
+        .highlight-orange {
+            background-color: #f7c97c !important;
+        }
+        .legend {
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+            margin: 12px 0 8px 0;
+            padding: 10px 16px;
+            background: #f0f5fb;
+            border-radius: 10px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .legend-box {
+            width: 28px;
+            height: 20px;
+            border-radius: 4px;
+            border: 1px solid #aaa;
+        }
+        .export-buttons {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .note {
+            font-size: 13px;
+            color: #3d5a78;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container" id="appContainer">
+    <h1>📦 Monitoring Produktivitas Bagger</h1>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <div>
+            <label>📂 Upload Excel:</label>
+            <input type="file" id="fileInput" accept=".xlsx,.xls" />
+        </div>
+        <div>
+            <label>⏰ Jam Break (0-23):</label>
+            <input type="number" id="breakHour" min="0" max="23" placeholder="contoh: 4" />
+            <button id="applyBreakBtn" class="btn-warning">Terapkan Break</button>
+            <button id="resetBreakBtn" style="background:#888;">Reset Break</button>
+        </div>
+        <div class="export-buttons">
+            <button id="exportExcelBtn" class="btn-success">📥 Ekspor Excel</button>
+            <button id="exportImageBtn">🖼️ Ekspor Gambar</button>
+        </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend">
+        <span class="legend-item"><span class="legend-box" style="background:#a3e4a3;"></span> ≥ 1000 (Hijau)</span>
+        <span class="legend-item"><span class="legend-box" style="background:#a3d0f5;"></span> ≥ 1500 (Biru Muda)</span>
+        <span class="legend-item"><span class="legend-box" style="background:#f7c97c;"></span> BREAK (Orange)</span>
+    </div>
+
+    <!-- Tabel -->
+    <div class="table-wrapper" id="tableWrapper">
+        <table id="dataTable">
+            <thead>
+                <tr>
+                    <th>Nama</th>
+                    <th>06:00</th>
+                    <th>05:00</th>
+                    <th>04:00</th>
+                    <th>03:00</th>
+                    <th>02:00</th>
+                    <th>01:00</th>
+                    <th>00:00</th>
+                    <th>Rata-rata</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <!-- Data akan diisi dari Excel -->
+            </tbody>
+        </table>
+    </div>
+    <div class="note">* Warna otomatis: Hijau (≥1000), Biru Muda (≥1500), Orange (BREAK). Klik "Terapkan Break" untuk ubah jam tertentu jadi BREAK.</div>
+</div>
+
+<script>
+    // ========== DATA SAMPLE (jika tidak upload) ==========
+    const sampleData = [
+        { nama: "Jon kenedi", h06:42, h05:173, h04:"BREAK", h03:318, h02:530, h01:533, h00:517 },
+        { nama: "Fauzan Sulaeman", h06:248, h05:239, h04:"BREAK", h03:601, h02:193, h01:275, h00:576 },
+        { nama: "Aditya", h06:91, h05:41, h04:"BREAK", h03:694, h02:375, h01:381, h00:542 },
+        { nama: "AHMAD ALKAPI", h06:76, h05:26, h04:"BREAK", h03:868, h02:365, h01:383, h00:594 },
+        { nama: "MAULANA YUSUF", h06:43, h05:91, h04:"BREAK", h03:317, h02:779, h01:716, h00:610 },
+        { nama: "Jery adam", h06:266, h05:409, h04:"BREAK", h03:410, h02:427, h01:413, h00:559 },
+        { nama: "Muhammad jaelani", h06:154, h05:697, h04:"BREAK", h03:369, h02:479, h01:433, h00:597 },
+        { nama: "SURYA ABDILLAH", h06:209, h05:297, h04:"BREAK", h03:446, h02:612, h01:630, h00:473 },
+        { nama: "LANJAR WIDODO", h06:174, h05:285, h04:"BREAK", h03:479, h02:551, h01:683, h00:821 },
+        { nama: "Muhammad ferza Davila", h06:219, h05:571, h04:"BREAK", h03:454, h02:603, h01:864, h00:727 },
+        { nama: "IRWAN FADILAH", h06:147, h05:157, h04:"BREAK", h03:556, h02:537, h01:986, h00:1277 },
+        { nama: "Ruskandi", h06:298, h05:195, h04:"BREAK", h03:863, h02:577, h01:745, h00:1005 },
+        { nama: "AGIEV DAVIC ALMATTAR", h06:178, h05:459, h04:"BREAK", h03:924, h02:998, h01:356, h00:927 },
+        { nama: "M. Rizki aditya", h06:270, h05:523, h04:"BREAK", h03:1070, h02:700, h01:486, h00:892 },
+        { nama: "Daud immanuel", h06:210, h05:275, h04:"BREAK", h03:1392, h02:659, h01:472, h00:1067 },
+        { nama: "ADE ISKANDAR", h06:256, h05:771, h04:"BREAK", h03:896, h02:785, h01:581, h00:1039 },
+        { nama: "GILANG SURYADI", h06:182, h05:497, h04:"BREAK", h03:940, h02:904, h01:976, h00:1059 },
+        { nama: "SANDI JULIANSYAH", h06:302, h05:614, h04:"BREAK", h03:772, h02:836, h01:913, h00:884 },
+        { nama: "MOCH TIRTA KUSUMA", h06:33, h05:830, h04:"BREAK", h03:937, h02:1055, h01:1089, h00:1080 },
+        { nama: "ADI SAPUTRA", h06:364, h05:915, h04:"BREAK", h03:1062, h02:876, h01:657, h00:1099 },
+        { nama: "Syahrul Gufron", h06:376, h05:751, h04:"BREAK", h03:1320, h02:910, h01:643, h00:1243 },
+        { nama: "Ahmad Sadam", h06:390, h05:532, h04:"BREAK", h03:1279, h02:851, h01:956, h00:1202 },
+        { nama: "MOHAMAD DAHLAN", h06:370, h05:793, h04:"BREAK", h03:970, h02:810, h01:1177, h00:1316 },
+        { nama: "AIDIN ERLANGGA", h06:448, h05:641, h04:"BREAK", h03:823, h02:1056, h01:1390, h00:1310 },
+        { nama: "DAREN HAQIMAL MULYADI", h06:148, h05:621, h04:"BREAK", h03:1771, h02:1090, h01:1122, h00:1024 },
+        { nama: "FAJAR SODIQ", h06:358, h05:311, h04:"BREAK", h03:1175, h02:1404, h01:1120, h00:1466 },
+        { nama: "Aris febriyanto", h06:355, h05:1104, h04:"BREAK", h03:1164, h02:1193, h01:1190, h00:1226 },
+        { nama: "SAVIO SUHENDAR AL FATIR", h06:285, h05:640, h04:"BREAK", h03:1520, h02:1460, h01:1287, h00:1567 },
+        { nama: "ALDI YUDISTIRA", h06:130, h05:1096, h04:"BREAK", h03:1363, h02:1432, h01:1123, h00:1646 },
+        { nama: "Fedli aridiansah", h06:492, h05:1485, h04:"BREAK", h03:1361, h02:1538, h01:1603, h00:1445 },
+        { nama: "DESMAN GEA", h06:1134, h05:1922, h04:"BREAK", h03:1841, h02:1425, h01:1333, h00:900 },
+        { nama: "Muhammad Damar Ramadhan", h06:494, h05:1296, h04:"BREAK", h03:1640, h02:1984, h01:1792, h00:1520 }
+    ];
+
+    let currentData = JSON.parse(JSON.stringify(sampleData));
+    let breakHourApplied = null; // simpan jam break yang diterapkan
+
+    // ========== RENDER TABEL ==========
+    function renderTable(data) {
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            // Kolom Nama
+            const tdNama = document.createElement('td');
+            tdNama.textContent = row.nama;
+            tdNama.style.fontWeight = '600';
+            tdNama.style.textAlign = 'left';
+            tr.appendChild(tdNama);
+
+            // Kolom jam: 06,05,04,03,02,01,00
+            const jamKeys = ['h06', 'h05', 'h04', 'h03', 'h02', 'h01', 'h00'];
+            let total = 0;
+            let count = 0;
+            jamKeys.forEach(key => {
+                const td = document.createElement('td');
+                const val = row[key];
+                let displayVal = val;
+                if (val === 'BREAK' || val === 'break' || val === 'Break') {
+                    displayVal = 'BREAK';
+                    td.classList.add('highlight-orange');
+                } else {
+                    const num = Number(val);
+                    if (!isNaN(num)) {
+                        displayVal = num;
+                        total += num;
+                        count++;
+                        if (num >= 1500) {
+                            td.classList.add('highlight-blue');
+                        } else if (num >= 1000) {
+                            td.classList.add('highlight-green');
+                        }
+                    } else {
+                        displayVal = val;
+                    }
+                }
+                td.textContent = displayVal;
+                tr.appendChild(td);
+            });
+
+            // Kolom Rata-rata (abaikan BREAK)
+            const avg = count > 0 ? Math.round(total / count) : 0;
+            const tdAvg = document.createElement('td');
+            tdAvg.textContent = avg;
+            tdAvg.style.fontWeight = 'bold';
+            if (avg >= 1500) tdAvg.classList.add('highlight-blue');
+            else if (avg >= 1000) tdAvg.classList.add('highlight-green');
+            tr.appendChild(tdAvg);
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    // ========== TERAPKAN BREAK ==========
+    function applyBreak(hour) {
+        // hour: 0-23, mapping ke kolom: 
+        // 06:00 -> h06, 05:00 -> h05, 04:00 -> h04, 03:00 -> h03, 02:00 -> h02, 01:00 -> h01, 00:00 -> h00
+        const map = {
+            6: 'h06', 5: 'h05', 4: 'h04', 3: 'h03', 2: 'h02', 1: 'h01', 0: 'h00'
+        };
+        const key = map[hour];
+        if (!key) {
+            alert('Jam break hanya bisa 0,1,2,3,4,5,6 (karena data jam 00:00 s/d 06:00)');
+            return;
+        }
+        currentData.forEach(row => {
+            row[key] = 'BREAK';
+        });
+        breakHourApplied = hour;
+        renderTable(currentData);
+    }
+
+    function resetBreak() {
+        // Kembalikan ke sampleData asli (atau data terakhir dari file)
+        // Untuk demo, kita reload dari sampleData
+        currentData = JSON.parse(JSON.stringify(sampleData));
+        breakHourApplied = null;
+        renderTable(currentData);
+    }
+
+    // ========== UPLOAD EXCEL ==========
+    function handleFileUpload(file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const json = XLSX.utils.sheet_to_json(firstSheet);
+
+                // Konversi ke format currentData
+                const newData = json.map(row => {
+                    // Cari kolom: Nama, 06:00, 05:00, dst
+                    const keys = Object.keys(row);
+                    const namaKey = keys.find(k => k.toLowerCase().includes('nama') || k.toLowerCase().includes('name'));
+                    const h06Key = keys.find(k => k.includes('06:00'));
+                    const h05Key = keys.find(k => k.includes('05:00'));
+                    const h04Key = keys.find(k => k.includes('04:00'));
+                    const h03Key = keys.find(k => k.includes('03:00'));
+                    const h02Key = keys.find(k => k.includes('02:00'));
+                    const h01Key = keys.find(k => k.includes('01:00'));
+                    const h00Key = keys.find(k => k.includes('00:00'));
+
+                    const getVal = (key) => {
+                        if (!key) return 0;
+                        const v = row[key];
+                        if (v === undefined || v === null) return 0;
+                        if (typeof v === 'string' && v.toUpperCase().includes('BREAK')) return 'BREAK';
+                        const num = Number(v);
+                        return isNaN(num) ? v : num;
+                    };
+
+                    return {
+                        nama: namaKey ? String(row[namaKey]) : 'Unknown',
+                        h06: getVal(h06Key),
+                        h05: getVal(h05Key),
+                        h04: getVal(h04Key),
+                        h03: getVal(h03Key),
+                        h02: getVal(h02Key),
+                        h01: getVal(h01Key),
+                        h00: getVal(h00Key)
+                    };
+                });
+
+                if (newData.length > 0) {
+                    currentData = newData;
+                    // Jika ada break yang diterapkan sebelumnya, terapkan ulang
+                    if (breakHourApplied !== null) {
+                        applyBreak(breakHourApplied);
+                    } else {
+                        renderTable(currentData);
+                    }
+                } else {
+                    alert('Tidak ada data yang terbaca dari file.');
+                }
+            } catch (err) {
+                alert('Gagal membaca file: ' + err.message);
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    // ========== EXPORT EXCEL ==========
+    function exportExcel() {
+        const exportData = currentData.map(row => ({
+            'Nama': row.nama,
+            '06:00': row.h06,
+            '05:00': row.h05,
+            '04:00': row.h04,
+            '03:00': row.h03,
+            '02:00': row.h02,
+            '01:00': row.h01,
+            '00:00': row.h00,
+            'Rata-rata': (() => {
+                const vals = [row.h06, row.h05, row.h04, row.h03, row.h02, row.h01, row.h00];
+                const nums = vals.filter(v => typeof v === 'number' && !isNaN(v));
+                return nums.length > 0 ? Math.round(nums.reduce((a,b) => a+b, 0) / nums.length) : 0;
+            })()
+        }));
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Produktivitas');
+        XLSX.writeFile(wb, 'Monitoring_Bagger.xlsx');
+    }
+
+    // ========== EXPORT IMAGE ==========
+    function exportImage() {
+        const wrapper = document.getElementById('tableWrapper');
+        html2canvas(wrapper, {
+            scale: 2,
+            backgroundColor: '#ffffff',
+            useCORS: true,
+            allowTaint: true,
+        }).then(canvas => {
+            const link = document.createElement('a');
+            link.download = 'Monitoring_Bagger.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }).catch(err => {
+            alert('Gagal export gambar: ' + err.message);
+        });
+    }
+
+    // ========== EVENT LISTENERS ==========
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        if (this.files && this.files.length > 0) {
+            handleFileUpload(this.files[0]);
+        }
+    });
+
+    document.getElementById('applyBreakBtn').addEventListener('click', function() {
+        const hour = parseInt(document.getElementById('breakHour').value);
+        if (isNaN(hour) || hour < 0 || hour > 6) {
+            alert('Masukkan jam 0-6 (karena data jam 00:00 s/d 06:00)');
+            return;
+        }
+        applyBreak(hour);
+    });
+
+    document.getElementById('resetBreakBtn').addEventListener('click', resetBreak);
+
+    document.getElementById('exportExcelBtn').addEventListener('click', exportExcel);
+
+    document.getElementById('exportImageBtn').addEventListener('click', exportImage);
+
+    // ========== RENDER AWAL ==========
+    renderTable(currentData);
+
+</script>
+
+</body>
+</html>
